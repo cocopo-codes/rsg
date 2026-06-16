@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Synonym Generator",
+  "schemaVersion": 1,
+  "description": "A rich synonym finder for fiction writers. Type any word to see a short definition followed by primary and related/evocative synonyms with part-of-speech tags. Click any synonym to dive into a new search. Definitions come from Datamuse, with an optional Wordnik API key for richer results. Recent searches are saved across sessions."
+}
+</script>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rich Synonym Finder</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Georgia', serif;
+      background: #faf8f5;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 32px 24px;
+    }
+
+    .container { max-width: 680px; margin: 0 auto; }
+
+    header { margin-bottom: 32px; }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: normal;
+      letter-spacing: 0.01em;
+      color: #2c2c2c;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #888;
+      font-family: 'Helvetica Neue', sans-serif;
+      font-style: italic;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .api-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 28px;
+      font-family: 'Helvetica Neue', sans-serif;
+      font-size: 0.78rem;
+      color: #aaa;
+    }
+
+    .api-row label { white-space: nowrap; font-style: italic; }
+
+    .api-row input[type="password"] {
+      flex: 1;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+      font-family: 'Helvetica Neue', sans-serif;
+      border: 1px solid #e0dbd3;
+      border-radius: 6px;
+      background: #fff;
+      color: #555;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .api-row input[type="password"]:focus { border-color: #8b6f47; }
+
+    .api-status {
+      font-size: 0.72rem;
+      white-space: nowrap;
+      color: #b08a52;
+      font-style: italic;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 1.1rem;
+      font-family: 'Georgia', serif;
+      border: 1.5px solid #d4cfc8;
+      border-radius: 8px;
+      background: #fff;
+      color: #1a1a1a;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus { border-color: #8b6f47; }
+    input[type="text"]::placeholder { color: #bbb; font-style: italic; }
+
+    button {
+      padding: 12px 22px;
+      font-size: 0.95rem;
+      font-family: 'Helvetica Neue', sans-serif;
+      background: #2c2c2c;
+      color: #faf8f5;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+
+    button:hover { background: #4a4a4a; }
+    button:disabled { background: #aaa; cursor: default; }
+
+    #status {
+      font-size: 0.85rem;
+      font-family: 'Helvetica Neue', sans-serif;
+      color: #999;
+      min-height: 1.2em;
+      margin-bottom: 20px;
+      font-style: italic;
+    }
+
+    #status.error { color: #b94040; font-style: normal; }
+
+    #results { display: none; }
+
+    .word-searched {
+      font-size: 0.8rem;
+      font-family: 'Helvetica Neue', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #aaa;
+      margin-bottom: 16px;
+    }
+
+    .word-searched span { color: #8b6f47; font-weight: 600; }
+
+    .definition {
+      font-size: 1rem;
+      line-height: 1.5;
+      color: #4a4438;
+      background: #fff;
+      border: 1.5px solid #e0dbd3;
+      border-left: 3px solid #8b6f47;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+    }
+
+    .definition .def-line { display: block; }
+    .definition .def-line + .def-line { margin-top: 6px; }
+
+    .definition .def-pos {
+      font-family: 'Helvetica Neue', sans-serif;
+      font-style: italic;
+      font-size: 0.8rem;
+      color: #b08a52;
+      margin-right: 6px;
+    }
+
+    .section-label {
+      font-size: 0.75rem;
+      font-family: 'Helvetica Neue', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #bbb;
+      margin: 20px 0 10px;
+    }
+
+    .synonym-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .show-more {
+      background: none;
+      border: none;
+      border-radius: 0;
+      color: #8b6f47;
+      font-family: 'Helvetica Neue', sans-serif;
+      font-size: 0.78rem;
+      font-style: italic;
+      cursor: pointer;
+      padding: 2px 0;
+    }
+
+    .show-more:hover {
+      background: none;
+      color: #6f5638;
+      text-decoration: underline;
+    }
+
+    .synonym-chip {
+      background: #fff;
+      border: 1.5px solid #e0dbd3;
+      border-radius: 24px;
+      padding: 8px 18px;
+      font-size: 1rem;
+      font-family: 'Georgia', serif;
+      color: #2c2c2c;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .synonym-chip:hover {
+      border-color: #8b6f47;
+      color: #8b6f47;
+      background: #fdf6ee;
+    }
+
+    .synonym-chip.rare { border-style: dashed; }
+
+    .chip-tag {
+      font-size: 0.65rem;
+      font-family: 'Helvetica Neue', sans-serif;
+      background: #f0ece6;
+      color: #aaa;
+      border-radius: 8px;
+      padding: 1px 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .synonym-chip:hover .chip-tag {
+      background: #f5e9d9;
+      color: #c49a5a;
+    }
+
+    .legend {
+      font-size: 0.78rem;
+      font-family: 'Helvetica Neue', sans-serif;
+      color: #bbb;
+      margin-top: 6px;
+      font-style: italic;
+    }
+
+    .history {
+      margin-top: 32px;
+      border-top: 1px solid #e8e3dc;
+      padding-top: 20px;
+    }
+
+    .history-title {
+      font-size: 0.75rem;
+      font-family: 'Helvetica Neue', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #aaa;
+      margin-bottom: 12px;
+    }
+
+    .history-items { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .history-chip {
+      background: none;
+      border: 1px solid #d4cfc8;
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-size: 0.85rem;
+      font-family: 'Georgia', serif;
+      color: #888;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .history-chip:hover { color: #8b6f47; border-color: #8b6f47; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .loading { animation: pulse 1.4s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Rich Synonym Finder</h1>
+      <p class="subtitle">for fiction writers — click any word to explore it</p>
+    </header>
+
+    <div class="input-row">
+      <input type="text" id="wordInput" placeholder="e.g. sour, cold, whisper…" autocomplete="off" />
+      <button id="searchBtn">Find Synonyms</button>
+    </div>
+
+    <div class="api-row">
+      <label for="wordnikKey">Wordnik API key (optional):</label>
+      <input type="password" id="wordnikKey" placeholder="paste key for richer definitions…" autocomplete="off" />
+      <span class="api-status" id="apiStatus"></span>
+    </div>
+
+    <div id="status"></div>
+
+    <div id="results">
+      <div class="word-searched">Synonyms for <span id="searchedWord"></span></div>
+
+      <div class="definition" id="definition" style="display:none"></div>
+
+      <div class="section" id="primarySection">
+        <div class="section-label">Primary synonyms</div>
+        <div class="synonym-grid" id="primaryGrid"></div>
+        <button class="show-more" id="primaryToggle" style="display:none"></button>
+      </div>
+
+      <div class="section" id="relatedSection" style="display:none">
+        <div class="section-label">Related &amp; evocative</div>
+        <div class="synonym-grid" id="relatedGrid"></div>
+        <button class="show-more" id="relatedToggle" style="display:none"></button>
+      </div>
+
+      <div class="section" id="associatedSection" style="display:none">
+        <div class="section-label">Associated words</div>
+        <div class="synonym-grid" id="associatedGrid"></div>
+        <button class="show-more" id="associatedToggle" style="display:none"></button>
+      </div>
+
+      <div class="legend">Tags show part of speech &nbsp;·&nbsp; click any word to search it</div>
+    </div>
+
+    <div class="history" id="historySection" style="display:none">
+      <div class="history-title">Recent searches</div>
+      <div class="history-items" id="historyItems"></div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    /* ================================================================
+       RICH SYNONYM FINDER
+       Single self-contained app. The code is grouped into logical
+       modules, each under its own banner:
+         1. Config   — endpoints, limits, lookup tables, section setup
+         2. State    — recent-search history (persisted to localStorage)
+         3. Data      — Datamuse + Wordnik fetching / normalizing
+         4. Render    — DOM building (chips, sections, definitions, history)
+         5. Search    — orchestration that ties it all together
+         6. Init      — event wiring on load
+       ================================================================ */
+
+    /* ---- 1. Config ------------------------------------------------ */
+    const API = {
+      datamuse: 'https://api.datamuse.com/words',
+      wordnik:  'https://api.wordnik.com/v4/word.json'
+    };
+
+    const MAX_FETCH   = 1000;  // pull the full result set; display is curated below
+    const MAX_DEFS    = 2;     // definition senses to show
+    const MAX_HISTORY = 12;    // recent searches kept
+
+    const POS_NAMES = { n: 'noun', v: 'verb', adj: 'adjective', adv: 'adverb', u: '' };
+
+    // Each result section maps a Datamuse relation to its DOM targets and how
+    // many chips to show before the "Show more" toggle. Adding a new section
+    // is just one entry here plus the matching markup.
+    const SECTIONS = [
+      { rel: 'rel_syn', initial: 14, sectionId: 'primarySection',    gridId: 'primaryGrid',    toggleId: 'primaryToggle' },
+      { rel: 'ml',      initial: 12, sectionId: 'relatedSection',    gridId: 'relatedGrid',    toggleId: 'relatedToggle' },
+      { rel: 'rel_trg', initial: 12, sectionId: 'associatedSection', gridId: 'associatedGrid', toggleId: 'associatedToggle' }
+    ];
+
+    const $ = id => document.getElementById(id);
+
+    /* ---- 2. State: recent-search history -------------------------- */
+    const history = JSON.parse(localStorage.getItem('synonym_history') || '[]');
+
+    function addToHistory(word) {
+      const idx = history.indexOf(word);
+      if (idx !== -1) history.splice(idx, 1);
+      history.push(word);
+      if (history.length > MAX_HISTORY) history.shift();
+      localStorage.setItem('synonym_history', JSON.stringify(history));
+      renderHistory();
+    }
+
+    /* ---- 3. Data: fetching + normalizing -------------------------- */
+    async function fetchJSON(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('API error ' + res.status);
+      return res.json();
+    }
+
+    // Word list for one Datamuse relation (rel_syn, ml, rel_trg, …).
+    function datamuseWords(rel, word) {
+      return fetchJSON(`${API.datamuse}?${rel}=${encodeURIComponent(word)}&md=p&max=${MAX_FETCH}`);
+    }
+
+    function stripTags(s) {
+      return (s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    }
+
+    // Normalized definition: array of { pos, text }. Uses Wordnik when an API
+    // key is set, otherwise (or on any failure) falls back to Datamuse.
+    async function fetchDefinition(word) {
+      const key = (localStorage.getItem('wordnik_key') || '').trim();
+
+      if (key) {
+        try {
+          const url = `${API.wordnik}/${encodeURIComponent(word)}/definitions` +
+            `?limit=3&includeRelated=false&useCanonical=true&includeTags=false` +
+            `&api_key=${encodeURIComponent(key)}`;
+          const res = await fetch(url);
+          if (res.ok) {
+            const defs = (await res.json() || [])
+              .filter(d => d && d.text)
+              .map(d => ({ pos: d.partOfSpeech || '', text: stripTags(d.text) }))
+              .filter(d => d.text)
+              .slice(0, MAX_DEFS);
+            if (defs.length) return defs;
+          }
+        } catch (e) { /* fall through to Datamuse */ }
+      }
+
+      try {
+        const data = await fetchJSON(`${API.datamuse}?sp=${encodeURIComponent(word)}&md=d&max=1`);
+        const raw = data && data[0] && data[0].defs;
+        if (raw && raw.length) {
+          return raw.slice(0, MAX_DEFS).map(line => {
+            // Datamuse format: "adj\ttext" — code before the tab is part of speech.
+            const i = line.indexOf('\t');
+            const code = i === -1 ? '' : line.slice(0, i);
+            const text = i === -1 ? line : line.slice(i + 1);
+            return { pos: POS_NAMES[code] || '', text: text.trim() };
+          });
+        }
+      } catch (e) { /* no definition available */ }
+
+      return [];
+    }
+
+    /* ---- 4. Render: DOM building ---------------------------------- */
+    function posLabel(tags) {
+      if (!tags) return '';
+      if (tags.includes('adj')) return 'adj';
+      if (tags.includes('adv')) return 'adv';
+      if (tags.includes('n'))   return 'n';
+      if (tags.includes('v'))   return 'v';
+      return '';
+    }
+
+    // A clickable word chip; clicking it starts a fresh search on that word.
+    function buildChip(wordObj) {
+      const chip = document.createElement('button');
+      chip.className = 'synonym-chip' + (wordObj.tags && wordObj.tags.includes('rare') ? ' rare' : '');
+      chip.textContent = wordObj.word;
+
+      const pos = posLabel(wordObj.tags);
+      if (pos) {
+        const tag = document.createElement('span');
+        tag.className = 'chip-tag';
+        tag.textContent = pos;
+        chip.appendChild(tag);
+      }
+
+      chip.onclick = () => runSearch(wordObj.word);
+      return chip;
+    }
+
+    function renderDefinition(defs) {
+      const el = $('definition');
+      el.innerHTML = '';
+      if (!defs || !defs.length) { el.style.display = 'none'; return; }
+
+      defs.forEach(d => {
+        const line = document.createElement('span');
+        line.className = 'def-line';
+        if (d.pos) {
+          const pos = document.createElement('span');
+          pos.className = 'def-pos';
+          pos.textContent = d.pos;
+          line.appendChild(pos);
+        }
+        line.appendChild(document.createTextNode(d.text));
+        el.appendChild(line);
+      });
+      el.style.display = 'block';
+    }
+
+    // Renders one section's chips with a "Show more / Show fewer" toggle.
+    function renderSection(cfg, words) {
+      const section = $(cfg.sectionId);
+      const grid = $(cfg.gridId);
+      const toggle = $(cfg.toggleId);
+
+      if (!words.length) { section.style.display = 'none'; return; }
+      section.style.display = 'block';
+
+      let expanded = false;
+      function draw() {
+        grid.innerHTML = '';
+        (expanded ? words : words.slice(0, cfg.initial)).forEach(w => grid.appendChild(buildChip(w)));
+        if (words.length > cfg.initial) {
+          toggle.style.display = 'inline';
+          toggle.textContent = expanded ? '− Show fewer' : `+ Show ${words.length - cfg.initial} more`;
+        } else {
+          toggle.style.display = 'none';
+        }
+      }
+      toggle.onclick = () => { expanded = !expanded; draw(); };
+      draw();
+    }
+
+    function renderHistory() {
+      const section = $('historySection');
+      const items = $('historyItems');
+      if (!history.length) { section.style.display = 'none'; return; }
+      section.style.display = 'block';
+      items.innerHTML = '';
+      history.slice().reverse().forEach(w => {
+        const chip = document.createElement('button');
+        chip.className = 'history-chip';
+        chip.textContent = w;
+        chip.onclick = () => runSearch(w);
+        items.appendChild(chip);
+      });
+    }
+
+    /* ---- 5. Search orchestration ---------------------------------- */
+    // term is optional: chips/history pass a word; the button/Enter omit it
+    // and use whatever is already in the input.
+    async function runSearch(term) {
+      const input = $('wordInput');
+      if (term !== undefined) input.value = term;
+      const word = input.value.trim().toLowerCase();
+      if (!word) return;
+
+      const btn = $('searchBtn');
+      const status = $('status');
+      const results = $('results');
+
+      btn.disabled = true;
+      results.style.display = 'none';
+      status.className = 'loading';
+      status.textContent = 'Finding rich synonyms…';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      try {
+        // Definition + every section's word list, all in parallel.
+        const [defs, ...lists] = await Promise.all([
+          fetchDefinition(word),
+          ...SECTIONS.map(s => datamuseWords(s.rel, word))
+        ]);
+
+        // Dedup across sections in priority order, then sort each by score.
+        const seen = new Set([word]);
+        const dedup = arr => arr
+          .filter(w => w.word && !seen.has(w.word) && seen.add(w.word))
+          .sort((a, b) => (b.score || 0) - (a.score || 0));
+        const deduped = lists.map(dedup);
+
+        if (deduped.every(list => !list.length)) {
+          throw new Error(`No synonyms found for "${word}". Try a different form of the word.`);
+        }
+
+        $('searchedWord').textContent = word;
+        renderDefinition(defs);
+        SECTIONS.forEach((cfg, i) => renderSection(cfg, deduped[i]));
+
+        status.textContent = '';
+        status.className = '';
+        results.style.display = 'block';
+        addToHistory(word);
+      } catch (err) {
+        status.className = 'error';
+        status.textContent = err.message || 'Something went wrong. Please try again.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    /* ---- 6. Init: event wiring ------------------------------------ */
+    // Wordnik key: load saved value, persist on edit, reflect active state.
+    function initWordnikKey() {
+      const keyInput = $('wordnikKey');
+      const apiStatus = $('apiStatus');
+      const reflect = () => { apiStatus.textContent = keyInput.value.trim() ? '✓ Wordnik active' : ''; };
+
+      keyInput.value = localStorage.getItem('wordnik_key') || '';
+      reflect();
+      keyInput.addEventListener('input', () => {
+        const v = keyInput.value.trim();
+        if (v) localStorage.setItem('wordnik_key', v);
+        else localStorage.removeItem('wordnik_key');
+        reflect();
+      });
+    }
+
+    $('searchBtn').addEventListener('click', () => runSearch());
+    $('wordInput').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
+    initWordnikKey();
+    renderHistory();
+  })();
+  </script>
+</body>
+</html>
