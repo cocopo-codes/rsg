@@ -1,0 +1,22 @@
+{
+  "name": "rsg",
+  "version": "1.0.0",
+  "description": "A simple Rich Synonym Generator by Coco Poley that uses DataMuse with an optional spot for users to paste a Wordnik API key for more literary terms.",
+  "type": "module",
+  "scripts": {
+    "build": "echo 'No build step required for static HTML'",
+    "test": "echo 'No tests specified'"
+  },
+  "keywords": [
+    "synonym",
+    "thesaurus",
+    "writing",
+    "datamuse",
+    "wordnik"
+  ],
+  "author": "Coco Poley",
+  "license": "MIT",
+  "dependencies": {
+    "@vercel/speed-insights": "^1.1.0"
+  }
+}
